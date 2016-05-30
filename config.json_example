@@ -1,0 +1,9 @@
+{
+    "logfile" : "pegelbot.log",
+    "pegel_api_url" : "http://www.stadt-koeln.de/interne-dienste/hochwasser/pegel_ws.php",
+     "twitter_access_token" : "XXX",
+     "twitter_access_token_secret" : "XXX", 
+     "twitter_consumer_key" : "XXX",
+     "twitter_consumer_secret" : "XXX",
+     "debug" : 1
+}
