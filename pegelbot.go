@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
+	"strconv"
 	"syscall"
 )
 
@@ -63,8 +65,22 @@ func get_water_level() {
 	hwpegel := new(Hochwasserpegel)
 	err = xml.Unmarshal(body, hwpegel)
 	check(err)
-	logger.Print("Pegel ist ", hwpegel.Pegel, " m um ", hwpegel.Datum)
-	tweet(fmt.Sprintf("Pegel ist %s m am %s um %s", hwpegel.Pegel, hwpegel.Datum, hwpegel.Uhrzeit))
+	logger.Printf("Pegel ist %s am %s um %s", hwpegel.Pegel, hwpegel.Datum, hwpegel.Uhrzeit)
+	// Number format
+	rp := regexp.MustCompile(",")
+	pegel_number := rp.ReplaceAllString(hwpegel.Pegel, ".")
+	pegel_float, err := strconv.ParseFloat(pegel_number, 64)
+	check(err)
+	tweet(fmt.Sprintf("Der Rheinpegel ist derzeit %s m, das sind %d Kölschstangen", hwpegel.Pegel, convert_to_koelsch(pegel_float)))
+}
+
+func convert_to_koelsch(conv_number_float float64) int {
+	const koelsch_stange_cm = 15
+	conv_number_cm := int(conv_number_float * 100)
+	conv_number_koelsch := conv_number_cm / koelsch_stange_cm
+	log.Printf("Converted %d cm to %d Kölsch", conv_number_cm, conv_number_koelsch)
+
+	return conv_number_koelsch
 }
 
 // check panics if an error is detected
@@ -89,7 +105,7 @@ func tweet(tweet_text string) {
 		if err != nil {
 			logger.Printf("Problem posting '%s': %s", tweet_text, err)
 		} else {
-			logger.Printf("Tweet with slogan %s posted for user %s", tweet_text, tweet.User.ScreenName)
+			logger.Printf("Tweet %s posted for user %s", tweet_text, tweet.User.ScreenName)
 		}
 	}
 }
