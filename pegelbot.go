@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"syscall"
+	"time"
 )
 
 type Configuration struct {
@@ -22,6 +23,8 @@ type Configuration struct {
 	Twitter_access_token_secret string
 	Twitter_consumer_key        string
 	Twitter_consumer_secret     string
+	Sleep_time_in_hours         int
+	Tweet_after_x_hours         int
 	Debug                       int
 }
 
@@ -36,6 +39,7 @@ var logfile *os.File
 var err error
 var logger *log.Logger
 var configuration Configuration
+var level_history [3]float64
 
 // init_bot opens a log file,
 func init_bot() {
@@ -54,6 +58,7 @@ func init_bot() {
 	logger.Print("Started...")
 }
 
+// API Abfragen
 func get_water_level() {
 
 	logger.Print("Querying ", configuration.Pegel_API_URL)
@@ -71,16 +76,52 @@ func get_water_level() {
 	pegel_number := rp.ReplaceAllString(hwpegel.Pegel, ".")
 	pegel_float, err := strconv.ParseFloat(pegel_number, 64)
 	check(err)
-	tweet(fmt.Sprintf("Der Rheinpegel ist derzeit %s m, das sind %d Kölschstangen", hwpegel.Pegel, convert_to_koelsch(pegel_float)))
+
+	// ablegen
+	level_history[2] = level_history[1]
+	level_history[1] = level_history[0]
+	level_history[0] = pegel_float
+
 }
 
 func convert_to_koelsch(conv_number_float float64) int {
 	const koelsch_stange_cm = 15
 	conv_number_cm := int(conv_number_float * 100)
 	conv_number_koelsch := conv_number_cm / koelsch_stange_cm
-	log.Printf("Converted %d cm to %d Kölsch", conv_number_cm, conv_number_koelsch)
+	logger.Printf("Converted %d cm to %d Kölsch", conv_number_cm, conv_number_koelsch)
 
 	return conv_number_koelsch
+}
+
+func find_tendency() string {
+	var tendency string
+
+	if level_history[1] > level_history[0] {
+		tendency = "down"
+	} else if level_history[1] < level_history[0] {
+		tendency = "up"
+	} else if level_history[1] == level_history[0] {
+		tendency = "equal"
+	}
+
+	return tendency
+
+}
+
+func write_tendency_tweet(tendency string) {
+	logger.Print("Die Tendenz hat sich geändert")
+	if tendency == "up" {
+		tweet(fmt.Sprintf("Achtung der Rhein beginnt zu steigen! Derzeit liegt der Pegel bei %.2f m", level_history[0]))
+	} else if tendency == "down" {
+		tweet(fmt.Sprintf("Der Rheinpegel sinkt! Derzeit liegen wir bei %.2f m", level_history[0]))
+	} else if tendency == "equal" {
+		tweet(fmt.Sprintf("Alles ruhig. Der Rheinpegel bleibt derzeit bei %.2f m", level_history[0]))
+	}
+}
+
+func write_scheduled_tweet() {
+	logger.Print("Zeit für einen Tweet")
+	tweet(fmt.Sprintf("Der Rheinpegel ist derzeit %.2f m, das sind %d Kölschstangen", level_history[0], convert_to_koelsch(level_history[0])))
 }
 
 // check panics if an error is detected
@@ -111,7 +152,10 @@ func tweet(tweet_text string) {
 }
 
 func main() {
-
+	var old_tendency string
+	var cur_tendency string
+	var first_run bool
+	now := time.Now()
 	// catch interrupts
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -122,7 +166,27 @@ func main() {
 		os.Exit(1)
 	}()
 
+	first_run = true
+
 	init_bot()
-	get_water_level()
+	for {
+		get_water_level()
+
+		old_tendency = cur_tendency
+		cur_tendency = find_tendency()
+		logger.Printf("Tendenz ist %s, Hour ist %d, Intervall ist %d", cur_tendency, now.Hour(), configuration.Tweet_after_x_hours)
+
+		// beim ersten Lauf Tendenz ignorieren
+		if (cur_tendency != old_tendency) && (first_run == false) {
+			write_tendency_tweet(cur_tendency)
+		} else if now.Hour()%configuration.Tweet_after_x_hours == 0 {
+			write_scheduled_tweet()
+		}
+
+		sleep_hours := configuration.Sleep_time_in_hours
+		logger.Printf("Will go to sleep for %d hours..", sleep_hours)
+		time.Sleep(time.Duration(sleep_hours) * time.Hour)
+		first_run = false
+	}
 
 }
