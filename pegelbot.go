@@ -111,17 +111,17 @@ func find_tendency() string {
 func write_tendency_tweet(tendency string) {
 	logger.Print("Die Tendenz hat sich geändert")
 	if tendency == "up" {
-		tweet(fmt.Sprintf("Achtung der Rhein beginnt zu steigen! Derzeit liegt der Pegel bei %.2f m", level_history[0]))
+		tweet(fmt.Sprintf("Achtung der Rhein beginnt zu steigen! Derzeit liegt der Pegel bei %.2f m #koeln #rhein", level_history[0]))
 	} else if tendency == "down" {
-		tweet(fmt.Sprintf("Der Rheinpegel sinkt! Derzeit liegen wir bei %.2f m", level_history[0]))
+		tweet(fmt.Sprintf("Der Rheinpegel sinkt! Derzeit liegen wir bei %.2f m #koeln #rhein", level_history[0]))
 	} else if tendency == "equal" {
-		tweet(fmt.Sprintf("Alles ruhig. Der Rheinpegel bleibt derzeit bei %.2f m", level_history[0]))
+		tweet(fmt.Sprintf("Alles ruhig. Der Rheinpegel bleibt derzeit bei %.2f m #koeln #rhein", level_history[0]))
 	}
 }
 
 func write_scheduled_tweet() {
 	logger.Print("Zeit für einen Tweet")
-	tweet(fmt.Sprintf("Der Rheinpegel ist derzeit %.2f m, das sind %d Kölschstangen", level_history[0], convert_to_koelsch(level_history[0])))
+	tweet(fmt.Sprintf("Der Rheinpegel ist derzeit %.2f m, das sind %d Kölschstangen #koeln #rhein", level_history[0], convert_to_koelsch(level_history[0])))
 }
 
 // check panics if an error is detected
