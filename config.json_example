@@ -4,6 +4,8 @@
      "twitter_access_token" : "XXX",
      "twitter_access_token_secret" : "XXX", 
      "twitter_consumer_key" : "XXX",
-     "twitter_consumer_secret" : "XXX",
+    "twitter_consumer_secret" : "XXX",
+    "sleep_time_in_hours" : 1,
+    "tweet_after_x_hours" : 5,
      "debug" : 1
 }
