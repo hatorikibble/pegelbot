@@ -50,7 +50,7 @@ func init_bot() {
 		os.Exit(1)
 	}
 	// config
-	file, _ := os.Open("config.json")
+	file, _ := os.Open(config_file)
 	decoder := json.NewDecoder(file)
 	configuration = Configuration{}
 	err := decoder.Decode(&configuration)
