@@ -41,9 +41,14 @@ var logger *log.Logger
 var configuration Configuration
 var level_history [3]float64
 
-// init_bot opens a log file,
+// init_bot reads the configuration and opens a logger
 func init_bot() {
 
+	config_file := os.Getenv("PEGELBOT_CONFIG")
+	if config_file == "" {
+		fmt.Println("no config file set in environment variable PEGELBOT_CONFIG!")
+		os.Exit(1)
+	}
 	// config
 	file, _ := os.Open("config.json")
 	decoder := json.NewDecoder(file)
@@ -103,7 +108,7 @@ func find_tendency() string {
 	} else if level_history[1] == level_history[0] {
 		tendency = "equal"
 	}
-
+	logger.Printf("0: %.2f, 1: %.2f, 2: %.2f -> %s", level_history[0], level_history[1], level_history[2], tendency)
 	return tendency
 
 }
@@ -154,7 +159,6 @@ func tweet(tweet_text string) {
 func main() {
 	var old_tendency string
 	var cur_tendency string
-	var first_run bool
 	now := time.Now()
 	// catch interrupts
 	c := make(chan os.Signal, 1)
@@ -166,18 +170,17 @@ func main() {
 		os.Exit(1)
 	}()
 
-	first_run = true
-
 	init_bot()
 	for {
+		now = time.Now()
 		get_water_level()
 
 		old_tendency = cur_tendency
 		cur_tendency = find_tendency()
-		logger.Printf("Tendenz ist %s, Hour ist %d, Intervall ist %d", cur_tendency, now.Hour(), configuration.Tweet_after_x_hours)
+		logger.Printf("Tendenz ist %s (war %s), Hour ist %d, Intervall ist %d", cur_tendency, old_tendency, now.Hour(), configuration.Tweet_after_x_hours)
 
-		// beim ersten Lauf Tendenz ignorieren
-		if (cur_tendency != old_tendency) && (first_run == false) {
+		// Tendenz ignorieren, solange Historie noch nicht gefuellt ist
+		if (cur_tendency != old_tendency) && (level_history[0] > 0 && level_history[1] > 0 && level_history[2] > 0) {
 			write_tendency_tweet(cur_tendency)
 		} else if now.Hour()%configuration.Tweet_after_x_hours == 0 {
 			write_scheduled_tweet()
@@ -186,7 +189,7 @@ func main() {
 		sleep_hours := configuration.Sleep_time_in_hours
 		logger.Printf("Will go to sleep for %d hours..", sleep_hours)
 		time.Sleep(time.Duration(sleep_hours) * time.Hour)
-		first_run = false
+
 	}
 
 }
