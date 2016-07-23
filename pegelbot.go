@@ -7,17 +7,22 @@ import (
 	"github.com/ChimeraCoder/anaconda"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
 	"regexp"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
 
 type Configuration struct {
 	Logfile                     string
+	Up_message                  string
+	Down_message                string
+	Equal_message               string
 	Pegel_API_URL               string
 	Twitter_access_token        string
 	Twitter_access_token_secret string
@@ -98,6 +103,36 @@ func convert_to_koelsch(conv_number_float float64) int {
 	return conv_number_koelsch
 }
 
+func get_tendency_message(tendency string) string {
+	var file string
+	var msg []string
+	var num_msg int
+
+	switch tendency {
+	case "up":
+		file = configuration.Up_message
+	case "down":
+		file = configuration.Down_message
+	case "equal":
+		file = configuration.Equal_message
+	}
+
+	// init random generator
+	rand.Seed(time.Now().UnixNano())
+
+	// read source file
+	content, err := ioutil.ReadFile(file)
+	check(err)
+	//fmt.Print(string(dat))
+	msg = strings.Split(string(content), "\n")
+
+	num_msg = len(msg) - 1
+	logger.Printf("Found %d elements in %s\n", num_msg, file)
+
+	return msg[rand.Intn(num_msg)]
+
+}
+
 func find_tendency() string {
 	var tendency string
 
@@ -171,6 +206,11 @@ func main() {
 	}()
 
 	init_bot()
+
+	fmt.Println(get_tendency_message("up"))
+
+	os.Exit(1)
+
 	for {
 		now = time.Now()
 		get_water_level()
