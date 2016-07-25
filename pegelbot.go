@@ -96,7 +96,7 @@ func get_water_level() {
 	check(err)
 
 	// ablegen
-	level_history[2] = level_history[1] - 10
+	level_history[2] = level_history[1]
 	level_history[1] = level_history[0]
 	level_history[0] = pegel_int
 
