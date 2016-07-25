@@ -30,6 +30,10 @@ type Configuration struct {
 	Twitter_consumer_secret     string
 	Sleep_time_in_hours         int
 	Tweet_after_x_hours         int
+	Min_change_cm               int
+	High_water_cm               int
+	High_water_level_1_cm       int
+	High_water_level_2_cm       int
 	Debug                       int
 }
 
@@ -44,7 +48,9 @@ var logfile *os.File
 var err error
 var logger *log.Logger
 var configuration Configuration
-var level_history [3]float64
+var level_history [3]int64
+var variance int64
+var last_tweet_timestamp int64
 
 // init_bot reads the configuration and opens a logger
 func init_bot() {
@@ -82,25 +88,42 @@ func get_water_level() {
 	check(err)
 	logger.Printf("Pegel ist %s am %s um %s", hwpegel.Pegel, hwpegel.Datum, hwpegel.Uhrzeit)
 	// Number format
+	// Pegel in Meter, aber auf cm genau
+	// Komma raus, centimeter da..
 	rp := regexp.MustCompile(",")
-	pegel_number := rp.ReplaceAllString(hwpegel.Pegel, ".")
-	pegel_float, err := strconv.ParseFloat(pegel_number, 64)
+	pegel_number := rp.ReplaceAllString(hwpegel.Pegel, "")
+	pegel_int, err := strconv.ParseInt(pegel_number, 10, 64)
 	check(err)
 
 	// ablegen
-	level_history[2] = level_history[1]
+	level_history[2] = level_history[1] - 10
 	level_history[1] = level_history[0]
-	level_history[0] = pegel_float
+	level_history[0] = pegel_int
+
+	// Streuung berechnen, wenn genuegend Werte da sind
+	if level_history[2] > 0 {
+		variance = level_history[2] - level_history[0]
+	} else {
+		variance = 0
+	}
+	// Absoluten Wert verwenden
+	if variance < 0 {
+		variance = -variance
+	}
 
 }
 
-func convert_to_koelsch(conv_number_float float64) int {
+func convert_to_koelsch(conv_number_cm int64) int64 {
 	const koelsch_stange_cm = 15
-	conv_number_cm := int(conv_number_float * 100)
 	conv_number_koelsch := conv_number_cm / koelsch_stange_cm
 	logger.Printf("Converted %d cm to %d Kölsch", conv_number_cm, conv_number_koelsch)
 
 	return conv_number_koelsch
+}
+
+func cm_to_m(cm int64) float64 {
+	m := float64(cm) / 100
+	return m
 }
 
 func get_tendency_message(tendency string) string {
@@ -143,25 +166,31 @@ func find_tendency() string {
 	} else if level_history[1] == level_history[0] {
 		tendency = "equal"
 	}
-	logger.Printf("0: %.2f, 1: %.2f, 2: %.2f -> %s", level_history[0], level_history[1], level_history[2], tendency)
+	logger.Printf("0: %d, 1: %d, 2: %d -> %s (%d)", level_history[0], level_history[1], level_history[2], tendency, variance)
 	return tendency
 
 }
 
 func write_tendency_tweet(tendency string) {
-	logger.Print("Die Tendenz hat sich geändert")
+	var slogan string
+	var tweet_msg string
+
+	logger.Print("Kölscher Tendenztweet")
+	slogan = get_tendency_message(tendency)
 	if tendency == "up" {
-		tweet(fmt.Sprintf("Achtung der Rhein beginnt zu steigen! Derzeit liegt der Pegel bei %.2f m #koeln #rhein", level_history[0]))
+		tweet_msg = fmt.Sprintf("%s Der Rheinpegel steigt! Derzeit liegen wir bei %.2f m #koeln #rhein", slogan, cm_to_m(level_history[0]))
 	} else if tendency == "down" {
-		tweet(fmt.Sprintf("Der Rheinpegel sinkt! Derzeit liegen wir bei %.2f m #koeln #rhein", level_history[0]))
+		tweet_msg = fmt.Sprintf("%s Der Rheinpegel sinkt! Derzeit liegen wir bei %.2f m #koeln #rhein", slogan, cm_to_m(level_history[0]))
 	} else if tendency == "equal" {
-		tweet(fmt.Sprintf("Alles ruhig. Der Rheinpegel bleibt derzeit bei %.2f m #koeln #rhein", level_history[0]))
+		tweet_msg = fmt.Sprintf("%s Der Rheinpegel bleibt derzeit bei %.2f m #koeln #rhein", slogan, cm_to_m(level_history[0]))
 	}
+	logger.Printf("Message has %d characters", len(tweet_msg))
+	tweet(tweet_msg)
 }
 
 func write_scheduled_tweet() {
 	logger.Print("Zeit für einen Tweet")
-	tweet(fmt.Sprintf("Der Rheinpegel ist derzeit %.2f m, das sind %d Kölschstangen #koeln #rhein", level_history[0], convert_to_koelsch(level_history[0])))
+	tweet(fmt.Sprintf("Der Rheinpegel ist derzeit %.2f m, das sind %d Kölschstangen #koeln #rhein", cm_to_m(level_history[0]), convert_to_koelsch(level_history[0])))
 }
 
 // check panics if an error is detected
@@ -181,12 +210,14 @@ func tweet(tweet_text string) {
 
 	if configuration.Debug == 1 {
 		logger.Printf("DEBUG-MODE! I am not posting '%s'!", tweet_text)
+		last_tweet_timestamp = int64(time.Now().Unix())
 	} else {
 		tweet, err := api.PostTweet(tweet_text, nil)
 		if err != nil {
 			logger.Printf("Problem posting '%s': %s", tweet_text, err)
 		} else {
 			logger.Printf("Tweet %s posted for user %s", tweet_text, tweet.User.ScreenName)
+			last_tweet_timestamp = int64(time.Now().Unix())
 		}
 	}
 }
@@ -207,25 +238,23 @@ func main() {
 
 	init_bot()
 
-	fmt.Println(get_tendency_message("up"))
-
-	os.Exit(1)
-
 	for {
 		now = time.Now()
+		tweet_date_lower_unix := now.Add(-(time.Duration(configuration.Tweet_after_x_hours) * time.Second)).Unix()
 		get_water_level()
 
 		old_tendency = cur_tendency
 		cur_tendency = find_tendency()
-		logger.Printf("Tendenz ist %s (war %s), Hour ist %d, Intervall ist %d", cur_tendency, old_tendency, now.Hour(), configuration.Tweet_after_x_hours)
+		logger.Printf("Tendenz ist %s (war %s), Varianz ist %d, Hour ist %d, Intervall ist %d Stunden", cur_tendency, old_tendency, variance, now.Hour(), configuration.Tweet_after_x_hours)
 
-		// Tendenz ignorieren, solange Historie noch nicht gefuellt ist
-		if (cur_tendency != old_tendency) && (level_history[0] > 0 && level_history[1] > 0 && level_history[2] > 0) {
+		// Streungslimit ueberschritten?
+		if variance > int64(configuration.Min_change_cm) {
+			logger.Printf("Varianz %d ist größer als Limit %d", variance, configuration.Min_change_cm)
 			write_tendency_tweet(cur_tendency)
-		} else if now.Hour()%configuration.Tweet_after_x_hours == 0 {
+		} else if int64(tweet_date_lower_unix) > last_tweet_timestamp {
+			// wiedermal Zeit fuer einen Tweet
 			write_scheduled_tweet()
 		}
-
 		sleep_hours := configuration.Sleep_time_in_hours
 		logger.Printf("Will go to sleep for %d hours..", sleep_hours)
 		time.Sleep(time.Duration(sleep_hours) * time.Hour)

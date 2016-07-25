@@ -9,6 +9,10 @@
      "twitter_consumer_key" : "XXX",
     "twitter_consumer_secret" : "XXX",
     "sleep_time_in_hours" : 1,
-    "tweet_after_x_hours" : 5,
+    "tweet_after_x_hours" : 24,
+    "min_change_cm" : 5,
+    "high_water_cm" : 450,
+    "high_water_level_1_cm" : 620,
+    "high_water_level_2_cm" : 830,
      "debug" : 1
 }
