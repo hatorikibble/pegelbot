@@ -86,14 +86,9 @@ func get_water_level() {
 	hwpegel := new(Hochwasserpegel)
 	err = xml.Unmarshal(body, hwpegel)
 	check(err)
-	logger.Printf("Pegel ist %s am %s um %s", hwpegel.Pegel, hwpegel.Datum, hwpegel.Uhrzeit)
+	logger.Printf("Pegel ist %s m am %s um %s", hwpegel.Pegel, hwpegel.Datum, hwpegel.Uhrzeit)
 	// Number format
-	// Pegel in Meter, aber auf cm genau
-	// Komma raus, centimeter da..
-	rp := regexp.MustCompile(",")
-	pegel_number := rp.ReplaceAllString(hwpegel.Pegel, "")
-	pegel_int, err := strconv.ParseInt(pegel_number, 10, 64)
-	check(err)
+        pegel_int := m_string_to_cm(hwpegel.Pegel)
 
 	// ablegen
 	level_history[2] = level_history[1]
@@ -113,6 +108,7 @@ func get_water_level() {
 
 }
 
+// cm in Stangen Koelsch umrechnen
 func convert_to_koelsch(conv_number_cm int64) int64 {
 	const koelsch_stange_cm = 15
 	conv_number_koelsch := conv_number_cm / koelsch_stange_cm
@@ -121,11 +117,27 @@ func convert_to_koelsch(conv_number_cm int64) int64 {
 	return conv_number_koelsch
 }
 
+// cm in m umrechnen
 func cm_to_m(cm int64) float64 {
 	m := float64(cm) / 100
 	return m
 }
 
+// Textangabe in Metern in cm Zahlenwert umrechnen
+func m_string_to_cm(m_string string) int64 {
+     var cm int64
+     rp := regexp.MustCompile(",")
+     m_string = rp.ReplaceAllString(m_string, ".")
+
+     m_number, err := strconv.ParseFloat(m_string, 64)
+     check(err)
+
+     cm = int64((m_number * 100))
+
+     return cm
+}
+
+// passenden Spruch aus Textdateien holen
 func get_tendency_message(tendency string) string {
 	var file string
 	var msg []string
@@ -240,7 +252,7 @@ func main() {
 
 	for {
 		now = time.Now()
-		tweet_date_lower_unix := now.Add(-(time.Duration(configuration.Tweet_after_x_hours) * time.Second)).Unix()
+		tweet_date_lower_unix := now.Add(-(time.Duration(configuration.Tweet_after_x_hours) * time.Hour)).Unix()
 		get_water_level()
 
 		old_tendency = cur_tendency
