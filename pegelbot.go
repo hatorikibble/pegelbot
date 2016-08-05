@@ -48,7 +48,7 @@ var logfile *os.File
 var err error
 var logger *log.Logger
 var configuration Configuration
-var level_history [3]int64
+var level_history [5]int64
 var variance int64
 var last_tweet_timestamp int64
 
@@ -88,16 +88,17 @@ func get_water_level() {
 	check(err)
 	logger.Printf("Pegel ist %s m am %s um %s", hwpegel.Pegel, hwpegel.Datum, hwpegel.Uhrzeit)
 	// Number format
-        pegel_int := m_string_to_cm(hwpegel.Pegel)
+	pegel_int := m_string_to_cm(hwpegel.Pegel)
 
-	// ablegen
-	level_history[2] = level_history[1]
-	level_history[1] = level_history[0]
+	// ablegen, alte Werte wandern nach hinten
+	for i := 4; i > 0; i-- {
+		level_history[i] = level_history[i-1]
+	}
 	level_history[0] = pegel_int
 
 	// Streuung berechnen, wenn genuegend Werte da sind
-	if level_history[2] > 0 {
-		variance = level_history[2] - level_history[0]
+	if level_history[4] > 0 {
+		variance = level_history[4] - level_history[0]
 	} else {
 		variance = 0
 	}
@@ -125,16 +126,16 @@ func cm_to_m(cm int64) float64 {
 
 // Textangabe in Metern in cm Zahlenwert umrechnen
 func m_string_to_cm(m_string string) int64 {
-     var cm int64
-     rp := regexp.MustCompile(",")
-     m_string = rp.ReplaceAllString(m_string, ".")
+	var cm int64
+	rp := regexp.MustCompile(",")
+	m_string = rp.ReplaceAllString(m_string, ".")
 
-     m_number, err := strconv.ParseFloat(m_string, 64)
-     check(err)
+	m_number, err := strconv.ParseFloat(m_string, 64)
+	check(err)
 
-     cm = int64((m_number * 100))
+	cm = int64((m_number * 100))
 
-     return cm
+	return cm
 }
 
 // passenden Spruch aus Textdateien holen
@@ -178,7 +179,7 @@ func find_tendency() string {
 	} else if level_history[1] == level_history[0] {
 		tendency = "equal"
 	}
-	logger.Printf("0: %d, 1: %d, 2: %d -> %s (%d)", level_history[0], level_history[1], level_history[2], tendency, variance)
+	logger.Printf("0: %d, 1: %d, 2: %d, 3: %d, 4: %d -> %s (%d)", level_history[0], level_history[1], level_history[2], level_history[3], level_history[4], tendency, variance)
 	return tendency
 
 }
