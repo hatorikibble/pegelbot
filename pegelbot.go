@@ -229,7 +229,16 @@ func write_scheduled_message_tweet(tendency string) {
 // number of koelsch glasses
 func write_scheduled_koelsch_tweet() {
 	logger.Print("tweet koelsch glasses")
-	tweet(fmt.Sprintf("Der Rheinpegel ist derzeit %.2f m, das sind %d Kölschstangen #koeln #rhein", cm_to_m(level_history[0]), convert_to_koelsch(level_history[0])))
+	tweet(fmt.Sprintf("Der Rheinpegel ist derzeit bei %.2f m, das sind %d Kölschstangen #koeln #rhein", cm_to_m(level_history[0]), convert_to_koelsch(level_history[0])))
+}
+
+// write_scheduled_cathedral_tweet tweets the water mark expressed in
+// relation to the height of the Cologne cathedral
+func write_scheduled_cathedral_tweet() {
+	var cathedral_height_cm int64 = 15738
+
+	logger.Print("tweet relation to cathedral")
+	tweet(fmt.Sprintf("Der Rheinpegel ist derzeit bei %.2f m, keine Angst, dass ist immer noch %.2f Meter niedriger als der Kölner Dom! #koeln #rhein", cm_to_m(level_history[0]), cm_to_m(cathedral_height_cm-level_history[0])))
 }
 
 // check panics if an error is detected
@@ -285,11 +294,13 @@ func main() {
 
 		old_tendency = cur_tendency
 		cur_tendency = find_tendency()
-		logger.Printf("Tendenz ist %s (war %s), Varianz ist %d, Hour ist %d, Intervall ist %d Stunden", cur_tendency, old_tendency, variance, now.Hour(), configuration.Tweet_after_x_hours)
+		logger.Printf("Tendency is %s (was %s), variance is %d, the hour is %d, interval is %d hours", cur_tendency, old_tendency, variance, now.Hour(), configuration.Tweet_after_x_hours)
+
+		write_scheduled_cathedral_tweet()
 
 		// variance above limit?
 		if variance > int64(configuration.Min_change_cm) {
-			logger.Printf("Varianz %d ist größer als Limit %d", variance, configuration.Min_change_cm)
+			logger.Printf("variance %d is greater than the limit %d", variance, configuration.Min_change_cm)
 			write_tendency_tweet(cur_tendency)
 		} else if int64(tweet_date_lower_unix) > last_tweet_timestamp {
 			// scheduled tweet
@@ -297,8 +308,11 @@ func main() {
 			// init random generator
 			rand.Seed(time.Now().UnixNano())
 			i := rand.Intn(100)
+			logger.Printf("The dice got me %d", i)
 			if i < 20 {
 				write_scheduled_koelsch_tweet()
+			} else if i >= 20 && i < 30 {
+				write_scheduled_cathedral_tweet()
 			} else {
 				write_scheduled_message_tweet(cur_tendency)
 			}
