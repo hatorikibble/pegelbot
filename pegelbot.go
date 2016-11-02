@@ -296,8 +296,6 @@ func main() {
 		cur_tendency = find_tendency()
 		logger.Printf("Tendency is %s (was %s), variance is %d, the hour is %d, interval is %d hours", cur_tendency, old_tendency, variance, now.Hour(), configuration.Tweet_after_x_hours)
 
-		write_scheduled_cathedral_tweet()
-
 		// variance above limit?
 		if variance > int64(configuration.Min_change_cm) {
 			logger.Printf("variance %d is greater than the limit %d", variance, configuration.Min_change_cm)
